@@ -38,7 +38,7 @@ def submit():
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute("""
-                    INSERT INTO contatos (nome, email, telefone, empresa, cargo)
+                    INSERT INTO leads (nome, email, telefone, empresa, cargo)
                     VALUES (%s, %s, %s, %s, %s)
                 """, (nome, email, telefone, empresa, cargo))
                 conn.commit()
