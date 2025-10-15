@@ -1,9 +1,10 @@
 import os
-import psycopg2
+import psycopg2-binary
 import psycopg2.extras
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
 import requests
+
 
 # Carrega variáveis do .env
 load_dotenv()
