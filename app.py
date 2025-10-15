@@ -6,72 +6,64 @@ from dotenv import load_dotenv
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
 
-# --- CORREÇÃO PRINCIPAL ---
-# Ajuste para garantir que o Flask encontre arquivos na pasta raiz
-app = Flask(__name__, static_folder='.', static_url_path='')
-
-# Pega a URL de conexão do banco de dados das variáveis de ambiente
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Configuração do Flask para servir arquivos da pasta raiz
+app = Flask(__name__, static_url_path='', static_folder='.')
 
 def get_db_connection():
-    """Cria uma conexão com o banco de dados."""
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
-    except Exception as e:
-        print(f"Erro ao conectar ao banco de dados: {e}")
-        return None
+    """Cria e retorna uma conexão com o banco de dados."""
+    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+    return conn
 
 @app.route("/")
 def index():
-    """Renderiza a página principal com o formulário."""
-    # Como não especificamos 'template_folder', o Flask procura na pasta 'templates' por padrão.
-    # Para forçar a busca na pasta raiz, usamos render_template() do jeito que está,
-    # e garantimos que o 'static_folder' sirva a imagem.
-    return send_from_directory('.', 'index.html')
-
+    """Serve a página principal do formulário."""
+    return render_template("index.html")
 
 @app.route("/submit", methods=["POST"])
 def submit():
     """Recebe os dados do formulário e insere no banco de dados."""
-    nome = request.form.get('nome')
-    email = request.form.get('email')
-    telefone = request.form.get('telefone')
-    empresa = request.form.get('empresa')
-    cargo = request.form.get('cargo')
-
-    if not nome or not email:
-        return jsonify({"success": False, "message": "Nome e e-mail são obrigatórios."}), 400
-
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"success": False, "message": "Erro interno no servidor (conexão com DB)."}), 500
-
-    sql = """
-        INSERT INTO leads (nome, email, telefone, empresa, cargo)
-        VALUES (%s, %s, %s, %s, %s);
-    """
-    
+    conn = None
     try:
-        with conn.cursor() as cur:
-            cur.execute(sql, (nome, email, telefone, empresa, cargo))
-            conn.commit()
-        
-        return jsonify({"success": True, "message": "Inscrição realizada com sucesso! Fique de olho no seu e-mail."})
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-    except psycopg2.IntegrityError:
-        conn.rollback()
-        return jsonify({"success": False, "message": "Este e-mail já está cadastrado em nossa base."}), 409
+        # Pega os dados do formulário
+        nome = request.form.get('nome')
+        email = request.form.get('email')
+        telefone = request.form.get('telefone')
+        empresa = request.form.get('empresa')
+        cargo = request.form.get('cargo')
+        nascimento = request.form.get('nascimento') or None
+        data_admissao = request.form.get('data_admissao') or None
+
+        # --- ALTERAÇÃO AQUI ---
+        # A verificação de e-mail duplicado foi removida.
+        # O código agora vai direto para a inserção.
+
+        # Comando SQL para inserir o novo lead
+        sql = """
+            INSERT INTO leads (nome, email, telefone, empresa, cargo, nascimento, data_admissao)
+            VALUES (%s, %s, %s, %s, %s, %s, %s);
+        """
+        cur.execute(sql, (nome, email, telefone, empresa, cargo, nascimento, data_admissao))
         
+        # Salva a transação no banco
+        conn.commit()
+
+        return jsonify({"success": True, "message": "Lead cadastrado com sucesso!"}), 200
+
     except Exception as e:
-        conn.rollback()
-        print(f"Erro ao inserir dados: {e}")
-        return jsonify({"success": False, "message": "Ocorreu um erro inesperado ao processar sua inscrição."}), 500
-        
+        if conn:
+            conn.rollback()
+        # Log do erro no terminal do servidor para debug
+        print(f"Erro ao conectar ou inserir no banco de dados: {e}")
+        return jsonify({"success": False, "message": "Erro interno no servidor (conexão com DB)."}), 500
     finally:
         if conn:
+            cur.close()
             conn.close()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    # Roda o servidor. O Render vai usar o Gunicorn, mas isso é para teste local.
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5001)), debug=True)
 
