@@ -160,8 +160,7 @@
 
     <div class="container">
         <header class="header">
-            <!-- Caminho relativo para o logo, sem a barra inicial -->
-            <img src="logo.png" alt="Logo da Empresa" class="logo">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo da Empresa" class="logo">
             <h1>Acesso Exclusivo</h1>
             <p>Preencha seus dados para receber insights de mercado e inovação.</p>
         </header>
@@ -245,4 +244,3 @@
 
 </body>
 </html>
-
