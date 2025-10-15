@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
 
-# --- ALTERAÇÃO PRINCIPAL ---
-# Agora, dizemos ao Flask para procurar 'templates' e 'static' na pasta raiz ('.')
-app = Flask(__name__, template_folder='.', static_folder='.')
+# --- CORREÇÃO PRINCIPAL ---
+# Ajuste para garantir que o Flask encontre arquivos na pasta raiz
+app = Flask(__name__, static_folder='.', static_url_path='')
 
 # Pega a URL de conexão do banco de dados das variáveis de ambiente
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -25,12 +25,11 @@ def get_db_connection():
 @app.route("/")
 def index():
     """Renderiza a página principal com o formulário."""
-    # O Flask agora vai procurar o 'index.html' na pasta raiz
-    return render_template("index.html")
+    # Como não especificamos 'template_folder', o Flask procura na pasta 'templates' por padrão.
+    # Para forçar a busca na pasta raiz, usamos render_template() do jeito que está,
+    # e garantimos que o 'static_folder' sirva a imagem.
+    return send_from_directory('.', 'index.html')
 
-# O Flask já sabe servir arquivos da pasta 'static' (que agora é a raiz)
-# então a rota para /logo.png vai funcionar automaticamente.
-# Vamos apenas ajustar a rota de submit.
 
 @app.route("/submit", methods=["POST"])
 def submit():
