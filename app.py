@@ -1,60 +1,67 @@
 import os
 import psycopg2
-from flask import Flask, request, jsonify, render_template, send_from_directory
+import psycopg2.extras
+from flask import Flask, jsonify, request
 from dotenv import load_dotenv
+import requests
 
-# Carrega as variáveis de ambiente do arquivo .env
+# Carrega variáveis do .env
 load_dotenv()
 
-# Configuração do Flask (não precisa mudar)
-app = Flask(__name__, static_url_path='', static_folder='.')
+app = Flask(__name__)
+
+# Configurações do banco de dados
+DATABASE_URL = os.getenv("DATABASE_URL")
+WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")  # ✅ Webhook n8n via .env
 
 def get_db_connection():
-    """Cria e retorna uma conexão com o banco de dados."""
-    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
-    return conn
+    return psycopg2.connect(DATABASE_URL)
 
-# --- ALTERAÇÃO AQUI ---
-@app.route("/")
-def index():
-    """
-    Serve a página principal do formulário.
-    Usamos send_from_directory para dizer ao Flask para pegar o arquivo da pasta raiz ('.').
-    """
-    return send_from_directory('.', 'index.html')
-
-@app.route("/submit", methods=["POST"])
+@app.route('/submit', methods=['POST'])
 def submit():
-    """Recebe os dados do formulário e insere no banco de dados."""
-    conn = None
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+        data = request.json
+        nome = data.get("nome")
+        email = data.get("email")
+        telefone = data.get("telefone")
+        empresa = data.get("empresa")
+        cargo = data.get("cargo")
 
-        nome = request.form.get('nome')
-        email = request.form.get('email')
-        telefone = request.form.get('telefone')
-        empresa = request.form.get('empresa')
-        cargo = request.form.get('cargo')
+        # ✅ Salva no banco
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute("""
+                    INSERT INTO contatos (nome, email, telefone, empresa, cargo)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (nome, email, telefone, empresa, cargo))
+                conn.commit()
 
-        sql = """
-            INSERT INTO leads (nome, email, telefone, empresa, cargo)
-            VALUES (%s, %s, %s, %s, %s);
-        """
-        cur.execute(sql, (nome, email, telefone, empresa, cargo))
-        conn.commit()
+        # ✅ Dispara webhook n8n (se configurado)
+        if WEBHOOK_URL:
+            try:
+                requests.post(
+                    WEBHOOK_URL,
+                    json={
+                        "nome": nome,
+                        "email": email,
+                        "telefone": telefone,
+                        "empresa": empresa,
+                        "cargo": cargo
+                    }
+                )
+            except Exception as notify_error:
+                print(f"⚠ Falha ao notificar n8n: {notify_error}")
+        else:
+            print("⚠ Variável N8N_WEBHOOK_URL não encontrada no .env")
 
-        return jsonify({"success": True, "message": "Lead cadastrado com sucesso!"}), 200
+        return jsonify({"status": "success", "message": "Dados enviados com sucesso!"})
 
     except Exception as e:
-        if conn:
-            conn.rollback()
-        print(f"Erro ao conectar ou inserir no banco de dados: {e}")
-        return jsonify({"success": False, "message": "Erro interno no servidor (conexão com DB)."}), 500
-    finally:
-        if conn:
-            cur.close()
-            conn.close()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5001)), debug=True)
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({"message": "API funcionando!"})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
